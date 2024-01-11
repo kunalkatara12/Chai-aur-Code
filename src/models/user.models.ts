@@ -26,7 +26,6 @@ const userSchema: Schema = new Schema(
     },
     password: {
       type: String,
-      trim: true,
       required: [true, "Password is required"],
     },
     refreshToken: {
@@ -40,7 +39,12 @@ const userSchema: Schema = new Schema(
     coverImage: {
       type: String, //url
     },
-    watchHistory: [{ type: Schema.Types.ObjectId, ref: "Video" }],
+    watchHistory: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: "Video",
+      },
+    ],
   },
   { timestamps: true }
 );
@@ -88,4 +92,3 @@ userSchema.methods.generateRefreshToken = function () {
   );
 };
 export const User = model("User", userSchema);
-

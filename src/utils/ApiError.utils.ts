@@ -5,8 +5,8 @@ class ApiError extends Error {
   data: any;
 
   constructor(
-    message: string = "Something went wrong",
     statusCode: number,
+    message: string = "Something went wrong",
     errors: Array<Error> = [],
     stack: string = ""
   ) {

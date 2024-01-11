@@ -23,4 +23,9 @@ app.use(
 );
 // remove this middleware in production
 app.use(morgan("dev"));
+
+//routes
+import router from "./routes/index.routes";
+app.use("/api/v1", router);
+
 export default app;
