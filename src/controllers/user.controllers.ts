@@ -1,10 +1,10 @@
 import { Request, Response, NextFunction } from "express";
 import { User } from "../models/user.models";
 import asyncHandler from "../utils/asyncHandler.utils";
-import { compare, hash } from "bcrypt";
 import { ApiError } from "../utils/ApiError.utils";
 import { uploadOnCloudinary } from "../utils/cloudinary.utils";
 import { ApiResponse } from "../utils/ApiResponse.utils";
+import { verify } from "jsonwebtoken";
 
 const catchError = (error: any) => {
   console.log(error);
@@ -18,7 +18,7 @@ const generateAccessAndRefreshToken = async (userId: string) => {
   try {
     const user = await User.findById(userId);
     if (!user) {
-      throw new ApiError(401,"User not found on line 22");
+      throw new ApiError(401, "User not found on line 22");
     }
 
     const accessToken: string = user.generateAccessToken() as string;
@@ -34,6 +34,10 @@ const generateAccessAndRefreshToken = async (userId: string) => {
     catchError(error);
   }
 };
+      const options = {
+        httpOnly: true,
+        secure: true,
+      };
 
 export const registerUser = asyncHandler(
   async (req: Request, res: Response, next: NextFunction) => {
@@ -142,7 +146,6 @@ export const loginUser = asyncHandler(
       //   typeof user.password
       // );
 
-     
       // console.log(isPasswordValid, password, user.password );
 
       if (!isPasswordValid) {
@@ -161,10 +164,7 @@ export const loginUser = asyncHandler(
       const loggedInUser = await User.findById(user._id).select(
         "-password -refreshToken"
       );
-      const options = {
-        httpOnly: true,
-        secure: true,
-      };
+
       // send response
       return res
         .status(200)
@@ -200,10 +200,7 @@ export const logoutUser = asyncHandler(
         },
         { new: true }
       );
-      const options = {
-        httpOnly: true,
-        secure: true,
-      };
+
       return res
         .status(200)
         .clearCookie("accessToken", options)
@@ -219,5 +216,68 @@ export const logoutUser = asyncHandler(
       catchError(error);
     }
     // clear cookies
+  }
+);
+
+export const refreshAccessToken = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    try {
+      // getting refresh topen from cookie
+      const inRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
+      if (!inRefreshToken) {
+        throw new ApiError(
+          401,
+          "Unauthorized Request: Refresh token not found in user.controllers.ts"
+        );
+      }
+      // check if refresh token is valid with jwt.verify   
+      const decodedToken = await verify(
+        inRefreshToken,
+        process.env.REFRESH_TOKEN_SECRET as string
+      );
+      // console.log(decoded);
+      let user;
+      if (typeof decodedToken === 'string') {
+        throw new ApiError(
+          401,
+          "Invalid token in user.controllers.ts"
+        );
+      } else {
+        user = await User.findById(decodedToken._id);
+      }
+      if (!user) {
+        throw new ApiError(
+          401,
+          "User not found in user.controllers.ts"
+        );
+      }
+      if (inRefreshToken !== user.refreshToken) {
+        throw new ApiError(
+          401,
+          "Refresh Token exired or used in user.controllers.ts"
+        );
+      }
+      const { accessToken, newRefreshToken } = await generateAccessAndRefreshToken(
+        user._id  
+      );
+
+      // send response
+      return res
+        .status(200)
+        .cookie("accessToken", accessToken, options)
+        .cookie("refreshToken", newRefreshToken, options)
+        .json(
+          new ApiResponse(
+            200,
+            {
+              accessToken,
+              refreshToken:newRefreshToken,
+            },
+            "Access token refreshed successfully in user.controllers.ts"
+          )
+        );
+    } catch (error: any) {
+      catchError(error);
+    }
   }
 );
