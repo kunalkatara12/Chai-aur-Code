@@ -1,6 +1,18 @@
 import { compare, hash } from "bcrypt";
 import { sign } from "jsonwebtoken";
 import { Schema, model } from "mongoose";
+// import { Document } from "mongoose";
+
+// interface User extends Document {
+//   userName: string;
+//   email: string;
+//   fullName: string;
+//   password: string;
+//   refreshToken?: string;
+//   avatar: string;
+//   coverImage?: string;
+//   watchHistory?: Schema.Types.ObjectId[];
+// }
 
 const userSchema: Schema = new Schema(
   {

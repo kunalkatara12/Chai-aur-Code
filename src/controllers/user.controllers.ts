@@ -5,7 +5,12 @@ import { ApiError } from "../utils/ApiError.utils";
 import { uploadOnCloudinary } from "../utils/cloudinary.utils";
 import { ApiResponse } from "../utils/ApiResponse.utils";
 import { verify } from "jsonwebtoken";
-
+type UpdateFields = {
+  userName?: string;
+  fullName?: string;
+  email?: string;
+  // Add other fields if necessary
+};
 const catchError = (error: any) => {
   console.log(error);
   throw new ApiError(
@@ -34,13 +39,13 @@ const generateAccessAndRefreshToken = async (userId: string) => {
     catchError(error);
   }
 };
-      const options = {
-        httpOnly: true,
-        secure: true,
-      };
+const options = {
+  httpOnly: true,
+  secure: true,
+};
 
 export const registerUser = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
     try {
       const { userName, email, fullName, password, confirmPassword } = req.body;
       //existing user
@@ -122,7 +127,7 @@ export const registerUser = asyncHandler(
 );
 
 export const loginUser = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
     try {
       const { email, userName, password } = req.body;
 
@@ -188,7 +193,7 @@ export const loginUser = asyncHandler(
 );
 
 export const logoutUser = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
     try {
       const { _id } = req.user._id;
       await User.findByIdAndUpdate(
@@ -220,7 +225,7 @@ export const logoutUser = asyncHandler(
 );
 
 export const refreshAccessToken = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
     try {
       // getting refresh topen from cookie
       const inRefreshToken = req.cookies.refreshToken || req.body.refreshToken;
@@ -230,26 +235,20 @@ export const refreshAccessToken = asyncHandler(
           "Unauthorized Request: Refresh token not found in user.controllers.ts"
         );
       }
-      // check if refresh token is valid with jwt.verify   
+      // check if refresh token is valid with jwt.verify
       const decodedToken = await verify(
         inRefreshToken,
         process.env.REFRESH_TOKEN_SECRET as string
       );
       // console.log(decoded);
       let user;
-      if (typeof decodedToken === 'string') {
-        throw new ApiError(
-          401,
-          "Invalid token in user.controllers.ts"
-        );
+      if (typeof decodedToken === "string") {
+        throw new ApiError(401, "Invalid token in user.controllers.ts");
       } else {
         user = await User.findById(decodedToken._id);
       }
       if (!user) {
-        throw new ApiError(
-          401,
-          "User not found in user.controllers.ts"
-        );
+        throw new ApiError(401, "User not found in user.controllers.ts");
       }
       if (inRefreshToken !== user.refreshToken) {
         throw new ApiError(
@@ -257,9 +256,8 @@ export const refreshAccessToken = asyncHandler(
           "Refresh Token exired or used in user.controllers.ts"
         );
       }
-      const { accessToken, newRefreshToken } = await generateAccessAndRefreshToken(
-        user._id  
-      );
+      const { accessToken, newRefreshToken } =
+        await generateAccessAndRefreshToken(user._id);
 
       // send response
       return res
@@ -271,12 +269,226 @@ export const refreshAccessToken = asyncHandler(
             200,
             {
               accessToken,
-              refreshToken:newRefreshToken,
+              refreshToken: newRefreshToken,
             },
             "Access token refreshed successfully in user.controllers.ts"
           )
         );
     } catch (error: any) {
+      catchError(error);
+    }
+  }
+);
+
+export const changeCurrentPassword = asyncHandler(
+  async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
+    try {
+      const { currentPassword, newPassword, confirmPassword } = req.body;
+      if (newPassword === currentPassword) {
+        throw new ApiError(
+          400,
+          "New password can't be same as current password in user.controllers.ts"
+        );
+      }
+      if (newPassword !== confirmPassword) {
+        throw new ApiError(
+          400,
+          "New password and confirm password should match in user.controllers.ts"
+        );
+      }
+      const user = await User.findById(req.user?._id);
+      // const user = await User.findById(
+      //   (req as Request & { user?: { _id: string } }).user?._id
+      // );
+      const isPasswordCorrect = await user.isPasswordCorrect(currentPassword);
+      if (!isPasswordCorrect) {
+        throw new ApiError(
+          400,
+          "Current password is incorrect in user.controllers.ts"
+        );
+      }
+      user.password = newPassword;
+      await user.save({
+        validateBeforeSave: false,
+      });
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            {},
+            "Password Cahnged Successfully in user.controllers.ts"
+          )
+        );
+    } catch (error: any) {
+      catchError(error);
+    }
+  }
+);
+
+export const getCurrentUser = asyncHandler(
+  async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
+    try {
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            req?.user,
+            "Current user fetched successfully in user.controllers.ts"
+          )
+        );
+    } catch (error: any) {
+      catchError(error);
+    }
+  }
+);
+
+export const updateAccountDetails = asyncHandler(
+  async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
+    try {
+      const { newUserName, newFullName, newEmail } = req.body;
+      if (!newUserName && !newFullName && !newEmail) {
+        throw new ApiError(
+          400,
+          "At least one field is required in user.controllers.ts"
+        );
+      }
+
+      const updateFields: UpdateFields = {};
+
+      // Only include fields that are provided
+      if (newUserName) {
+        updateFields.userName = newUserName;
+      }
+
+      if (newFullName) {
+        updateFields.fullName = newFullName;
+      }
+
+      if (newEmail) {
+        updateFields.email = newEmail;
+      }
+      if (newUserName || newEmail) {
+        const query: Record<string, string> = {};
+
+        if (newUserName) {
+          query.userName = newUserName;
+        }
+
+        if (newEmail) {
+          query.email = newEmail;
+        }
+
+        const exUserWithSameField = await User.findOne(query);
+
+        if (exUserWithSameField) {
+          throw new ApiError(
+            409,
+            `User already exists with the same ${
+              newUserName ? "username" : "email"
+            } in user.controllers.ts`
+          );
+        }
+      }
+      const userWithUpdatedInfo = User.findByIdAndUpdate(
+        req.user?._id,
+        {
+          $set: updateFields,
+        },
+        {
+          new: true,
+        }
+      ).select("-password");
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            userWithUpdatedInfo,
+            "Account details updated successfully in user.controllers.ts"
+          )
+        );
+    } catch (error) {
+      catchError(error);
+    }
+  }
+);
+
+export const updateAvatar = asyncHandler(
+  async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
+    try {
+      const newAvataLocalPath = req.file?.path;
+      if (!newAvataLocalPath)
+        throw new ApiError(400, "Avatar is required in user.controllers.ts");
+      const newAvatar = await uploadOnCloudinary(newAvataLocalPath);
+      if (!newAvatar.url)
+        throw new ApiError(
+          400,
+          "Avatar not uploaded properly in user.controllers.ts"
+        );
+      const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+          $set: {
+            avatar: newAvatar.url,
+          },
+        },
+        {
+          new: true,
+        }
+      ).select("-password");
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            user,
+            "Avatar updated successfully in user.controllers.ts"
+          )
+        );
+    } catch (error) {
+      catchError(error);
+    }
+  }
+);
+
+export const updateCoverImage = asyncHandler(
+  async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
+    try {
+      const newCoverImageLocalPath = req.file?.path;
+      if (!newCoverImageLocalPath)
+        throw new ApiError(
+          400,
+          "Cover image is required in user.controllers.ts"
+        );
+      const newCoverImage = await uploadOnCloudinary(newCoverImageLocalPath);
+      if (!newCoverImage.url)
+        throw new ApiError(
+          400,
+          "Cover image not uploaded properly in user.controllers.ts"
+        );
+      const user = await User.findByIdAndUpdate(
+        req.user?._id,
+        {
+          $set: {
+            coverImage: newCoverImage.url,
+          },
+        },
+        {
+          new: true,
+        }
+      ).select("-password");
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            user,
+            "Cover image updated successfully in user.controllers.ts"
+          )
+        );
+    } catch (error) {
       catchError(error);
     }
   }
