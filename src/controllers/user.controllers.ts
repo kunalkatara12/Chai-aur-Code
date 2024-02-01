@@ -5,6 +5,7 @@ import { ApiError } from "../utils/ApiError.utils";
 import { uploadOnCloudinary } from "../utils/cloudinary.utils";
 import { ApiResponse } from "../utils/ApiResponse.utils";
 import { verify } from "jsonwebtoken";
+import { Types } from "mongoose";
 type UpdateFields = {
   userName?: string;
   fullName?: string;
@@ -502,12 +503,11 @@ export const updateCoverImage = asyncHandler(
   }
 );
 
-
 export const getUserChannelProfile = asyncHandler(
   async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
     try {
       const { userName } = req.params;
-      if (!userName) {
+      if (!userName?.trim()) {
         throw new ApiError(400, "Username is missing in user.controllers.ts");
       }
       const channel = await User.aggregate(
@@ -565,8 +565,7 @@ export const getUserChannelProfile = asyncHandler(
           }
         ]
       );
-      if(!channel?.length)
-      {
+      if (!channel?.length) {
         throw new ApiError(404, "Channel not found in user.controllers.ts");
       }
       return res
@@ -582,4 +581,57 @@ export const getUserChannelProfile = asyncHandler(
       catchError(error);
     }
 
-  });
+  }
+);
+
+export const getWatchHistory = asyncHandler(
+  async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
+    try {
+      const user = await User.aggregate([
+        {
+          $match: {
+            _id: new Types.ObjectId(req.user?._id)
+          }
+        },
+        {
+          $lookup: {
+            from: "videos",
+            localField: "watchHistory",
+            foreignField: "user",
+            as: "watchHistory",
+            pipeline: [
+              {
+                $lookup: {
+                  from: "users",
+                  localField: "owner",
+                  foreignField: "_id",
+                  as: "owner",
+                  pipeline: [
+                    {
+                      $project: {
+                        fullName: 1,
+                        userName: 1,
+                        avatar: 1,
+                      }
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        },
+        {
+          $addFields: {
+            owner: {
+              // $arrayElemAt: ["$owner", 0]
+              $first: "$owner"
+            }
+          }
+        }
+      ])
+      return res.status(200).json(new ApiResponse(200, user[0].watchHistory, "Watch history fetched successfully in user.controllers.ts"));
+    } catch (error) {
+      catchError(error);
+    }
+  }
+);
