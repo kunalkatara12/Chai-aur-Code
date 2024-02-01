@@ -394,8 +394,7 @@ export const updateAccountDetails = asyncHandler(
         if (exUserWithSameField) {
           throw new ApiError(
             409,
-            `User already exists with the same ${
-              newUserName ? "username" : "email"
+            `User already exists with the same ${newUserName ? "username" : "email"
             } in user.controllers.ts`
           );
         }
@@ -502,3 +501,85 @@ export const updateCoverImage = asyncHandler(
     }
   }
 );
+
+
+export const getUserChannelProfile = asyncHandler(
+  async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
+    try {
+      const { userName } = req.params;
+      if (!userName) {
+        throw new ApiError(400, "Username is missing in user.controllers.ts");
+      }
+      const channel = await User.aggregate(
+        [
+          {
+            $match: {
+              userName: userName
+            }
+          },
+          {
+            $lookup: {
+              from: "subscriptions",
+              localField: "_id",
+              foreignField: "channel",
+              as: "subscribers"
+            }
+          },
+          {
+            $lookup: {
+              from: "subscriptions",
+              localField: "_id",
+              foreignField: "subscriber",
+              as: "subscribedTo"
+            }
+          },
+          {
+            $addFields: {
+              subscribeersCount: {
+                $size: "$subscribers"
+              },
+              channelsSubscribedToCount: {
+                $size: "$subscribedTo"
+              },
+              isSubscribed: {
+                $cond: {
+                  if: {
+                    $in: [req.user?._id, "$subscribers.subscriber"]
+                  },
+                  then: true,
+                  else: false
+                }
+              }
+            }
+          },
+          {
+            $project: {
+              fullName: 1,
+              userName: 1,
+              subscribersCount: 1,
+              channelsSubscribedToCount: 1,
+              avatar: 1,
+              coverImage: 1,
+              email: 1,
+            }
+          }
+        ]
+      );
+      if(!channel?.length)
+      {
+        throw new ApiError(404, "Channel not found in user.controllers.ts");
+      }
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            channel[0],
+            "Channel profile fetched successfully in user.controllers.ts"
+          )
+        );
+    } catch (error: any) {
+      catchError(error);
+    }
+
+  });
