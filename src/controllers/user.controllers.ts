@@ -45,7 +45,11 @@ const options = {
 };
 
 export const registerUser = asyncHandler(
-  async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
+  async (
+    req: Request & { user?: any } & { files?: any },
+    res: Response,
+    next: NextFunction
+  ) => {
     try {
       const { userName, email, fullName, password, confirmPassword } = req.body;
       //existing user
@@ -162,9 +166,11 @@ export const loginUser = asyncHandler(
 
       // create token
       // save refresh token in db
-      const { accessToken, refreshToken } = await generateAccessAndRefreshToken(
-        user._id
-      );
+      const { accessToken, refreshToken } =
+        (await generateAccessAndRefreshToken(user._id)) as {
+          accessToken: string;
+          refreshToken: string;
+        };
       // send token in cookie
       const loggedInUser = await User.findById(user._id).select(
         "-password -refreshToken"
@@ -256,9 +262,12 @@ export const refreshAccessToken = asyncHandler(
           "Refresh Token exired or used in user.controllers.ts"
         );
       }
-      const { accessToken, newRefreshToken } =
-        await generateAccessAndRefreshToken(user._id);
-
+      const { accessToken, refreshToken } =
+        (await generateAccessAndRefreshToken(user._id)) as {
+          accessToken: string;
+          refreshToken: string;
+        };
+      const newRefreshToken: string = refreshToken;
       // send response
       return res
         .status(200)

@@ -6,7 +6,7 @@ import {
   registerUser,
 } from "../controllers/user.controllers";
 import { upload } from "../middlewares/multer.middlewares";
-import { registerValidator, validate } from "../utils/validators.utils";
+import { loginValidator, registerValidator, validate } from "../utils/validators.utils";
 import { verifyJWT } from "../middlewares/auth.middlewares";
 
 const userRouter = Router();
@@ -21,7 +21,7 @@ userRouter.post(
   registerUser
 );
 
-userRouter.post("/login", loginUser);
+userRouter.post("/login",validate(loginValidator), loginUser);
 userRouter.post("/logout", verifyJWT, logoutUser);
 userRouter.post("/refresh-token", refreshAccessToken);
 export default userRouter;

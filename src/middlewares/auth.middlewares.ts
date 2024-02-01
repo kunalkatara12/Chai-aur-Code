@@ -11,7 +11,7 @@ type DecodedToken = {
   fullName: string;
 };
 export const verifyJWT = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction) => {
+  async (req: Request & { user?: any }, res: Response, next: NextFunction) => {
     try {
       const token =
         req.cookies?.accessToken || req.header("Authorization")?.split(" ")[1];
@@ -32,7 +32,7 @@ export const verifyJWT = asyncHandler(
       if (!user) throw new ApiError(404, "No user found with this id");
       req.user = user;
       next();
-    } catch (error:any) {
+    } catch (error: any) {
       throw new ApiError(401, "Invalid Access Token in auth.middlewares.ts");
     }
   }
